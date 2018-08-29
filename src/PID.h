@@ -48,6 +48,8 @@ class PID {
   double Kp;
   double Ki;
   double Kd;
+
+  bool initialized;
 };
 
 #endif /* PID_H */

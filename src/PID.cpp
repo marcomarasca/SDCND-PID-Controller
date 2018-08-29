@@ -7,7 +7,7 @@ using namespace std;
  * PID class implementation
  */
 
-PID::PID() : Kp(0.0), Ki(0.0), Kd(0.0) {}
+PID::PID() : p_error(0.0), i_error(0.0), d_error(0.0), Kp(0.0), Ki(0.0), Kd(0.0), initialized(false) {}
 
 PID::~PID() {}
 
@@ -18,6 +18,11 @@ void PID::Init(double Kp, double Ki, double Kd) {
 }
 
 void PID::UpdateError(double cte) {
+  if (!initialized) {
+    // Sets initial p error
+    p_error = cte;
+    initialized = true;
+  }
   d_error = cte - p_error;  // p_error contains the previous cte
   p_error = cte;
   i_error += cte;
