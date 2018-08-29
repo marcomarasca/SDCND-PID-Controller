@@ -2,7 +2,9 @@
 #include <uWS/uWS.h>
 #include <fstream>
 #include <iostream>
+#include <vector>
 #include "PID.h"
+#include "Tuner.h"
 #include "json.hpp"
 
 // for convenience
@@ -30,14 +32,26 @@ std::string hasData(std::string s) {
 }
 
 void reset_simulator(uWS::WebSocket<uWS::SERVER> &ws) {
+  std::cout << "Resetting simulator" << std::endl;
   std::string msg = "42[\"reset\",{}]";
   ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 }
 
-double runSimulation(double Kp, double Ki, double Kd) {
+void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
   uWS::Hub h;
 
   PID steering_pid;
+
+  std::vector<double> params = {Kp, Kd};
+  std::vector<double> params_delta = {0.5, 0.8};
+
+  Tuner tuner = {params, params_delta, max_steps};
+
+  if (tuner.Enabled()) {
+    std::cout << "Tuning ENABLED" << std::endl;
+    tuner.PrintParams();
+    tuner.PrintParamsDelta();
+  }
 
   // Initializes the controller coefficients
   steering_pid.Init(Kp, Ki, Kd);
@@ -55,58 +69,74 @@ double runSimulation(double Kp, double Ki, double Kd) {
     exit(EXIT_FAILURE);
   }
 
-  h.onMessage(
-      [&steering_pid, &file_out](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
-        // "42" at the start of the message means there's a websocket message event.
-        // The 4 signifies a websocket message
-        // The 2 signifies a websocket event
-        if (length && length > 2 && data[0] == '4' && data[1] == '2') {
-          auto s = hasData(std::string(data).substr(0, length));
-          if (s != "") {
-            auto j = json::parse(s);
-            std::string event = j[0].get<std::string>();
-            if (event == "telemetry") {
-              // j[1] is the data JSON object
-              double cte = std::stod(j[1]["cte"].get<std::string>());
-              double speed = std::stod(j[1]["speed"].get<std::string>());
-              double angle = std::stod(j[1]["steering_angle"].get<std::string>());
+  h.onMessage([&steering_pid, &file_out, &tuner, &max_steps](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+                                                             uWS::OpCode opCode) {
+    // "42" at the start of the message means there's a websocket message event.
+    // The 4 signifies a websocket message
+    // The 2 signifies a websocket event
+    if (length && length > 2 && data[0] == '4' && data[1] == '2') {
+      auto s = hasData(std::string(data).substr(0, length));
+      if (s != "") {
+        auto j = json::parse(s);
+        std::string event = j[0].get<std::string>();
+        if (event == "telemetry") {
+          // j[1] is the data JSON object
+          double cte = std::stod(j[1]["cte"].get<std::string>());
+          double speed = std::stod(j[1]["speed"].get<std::string>());
+          double angle = std::stod(j[1]["steering_angle"].get<std::string>());
 
-              // Updates the controller errors
-              steering_pid.UpdateError(cte);
+          if (tuner.Enabled()) {
+            std::vector<double> tuned_params = tuner.Tune(cte);
 
-              // Gets the total error and uses it as the steering angle
-              double steer_value = steering_pid.TotalError();
-              // Clamp the value between 1 and -1
-              steer_value = clamp_steering(steer_value);
-              // Set throttle value
-              double throttle = 0.3;
+            steering_pid.Init(tuned_params[0], 0, tuned_params[1]);
 
-              // DEBUG
-              std::cout << "Current Speed: " << speed << ", Current Steering Angle: " << angle << std::endl;
-              std::cout << "CTE: " << cte << ", Steering Value: " << steer_value << std::endl;
-
-              json msgJson;
-              msgJson["steering_angle"] = steer_value;
-              msgJson["throttle"] = throttle;
-
-              // Writes output to file
-              file_out << speed << "\t";
-              file_out << angle << "\t";
-              file_out << cte << "\t";
-              file_out << steer_value << "\t";
-              file_out << throttle << std::endl;
-              file_out.flush();
-
-              auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            if (tuner.IsResetCycle()) {
+              reset_simulator(ws);
+              return;
             }
-          } else {
-            // Manual driving
-            std::string msg = "42[\"manual\",{}]";
-            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
           }
+
+          // Updates the controller errors
+          steering_pid.UpdateError(cte);
+
+          // Gets the total error and uses it as the steering angle
+          double steer_value = steering_pid.TotalError();
+          // Clamp the value between 1 and -1
+          steer_value = clamp_steering(steer_value);
+
+          // Set throttle value according to steering value, the more the angle the less the throttle.
+          // Min throttle 0.3, max throttle 0.5
+          double throttle = (1 - fabs(steer_value)) * 0.2 + 0.3;
+
+          // DEBUG
+          if (!tuner.Enabled()) {
+            std::cout << "Current Speed: " << speed << ", Current Steering Angle: " << angle << std::endl;
+            std::cout << "CTE: " << cte << ", Steering Value: " << steer_value << " Throttle: " << throttle
+                      << std::endl;
+          }
+
+          json msgJson;
+          msgJson["steering_angle"] = steer_value;
+          msgJson["throttle"] = throttle;
+
+          // Writes output to file
+          file_out << speed << "\t";
+          file_out << angle << "\t";
+          file_out << cte << "\t";
+          file_out << steer_value << "\t";
+          file_out << throttle << std::endl;
+          file_out.flush();
+
+          auto msg = "42[\"steer\"," + msgJson.dump() + "]";
+          ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
-      });
+      } else {
+        // Manual driving
+        std::string msg = "42[\"manual\",{}]";
+        ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+      }
+    }
+  });
 
   // We don't need this since we're not using HTTP but if it's removed the
   // program doesn't compile :-(
@@ -139,16 +169,17 @@ double runSimulation(double Kp, double Ki, double Kd) {
     if (file_out.is_open()) {
       file_out.close();
     }
-    return -1;
+    exit(EXIT_FAILURE);
   }
 
   h.run();
 }
 
 int main(int argc, char *argv[]) {
-  double Kp = 0.0;
+  double Kp = 0.1;
   double Ki = 0.0;
-  double Kd = 0.0;
+  double Kd = 0.4;
+  unsigned int max_steps = 0; // 4500 for entire lap
 
   if (argc > 1) {
     if (argc < 4) {
@@ -172,9 +203,17 @@ int main(int argc, char *argv[]) {
     if (!(iss >> Kd)) {
       std::cout << "Could not read Kd coefficient, using 0" << std::endl;
     }
+
+    if (argc > 4) {
+      iss.clear();
+      iss.str(argv[4]);
+      if (!(iss >> max_steps)) {
+        std::cout << "Could not read max_steps, Tuning DISABLED" << std::endl;
+      }
+    }
   }
 
-  std::cout << "Using PID cofficients: " << Kp << " - " << Ki << " - " << Kd << std::endl;
+  std::cout << "Using PID cofficients: " << Kp << " " << Ki << " " << Kd << std::endl;
 
-  runSimulation(Kp, Ki, Kd);
+  runSimulation(Kp, Ki, Kd, max_steps);
 }
