@@ -4,11 +4,11 @@
 [//]: # (Image References)
 
 [sim_gif]: ./images/sim.gif "PID controller running in the simulator"
-[sim_P_H_gif]: ./images/simP_H.gif "P only controller running in the simulator, with high coefficient"
-[sim_P_L_gif]: ./images/simP_L.gif "P only controller running in the simulator, with low coefficient"
-[sim_PI_H_gif]: ./images/simPI_H.gif "PI controller running in the simulator, with high I coefficient"
-[sim_PD_H_gif]: ./images/simPD_H.gif "PD controller running in the simulator, with high D coefficient"
-[sim_PD_L_gif]: ./images/simPD_L.gif "PD controller running in the simulator, with low D coefficient"
+[sim_P_H_gif]: ./images/high_p.gif "P only controller running in the simulator, with high coefficient"
+[sim_P_L_gif]: ./images/low_p.gif "P only controller running in the simulator, with low coefficient"
+[sim_PI_H_gif]: ./images/high_i.gif "PI controller running in the simulator, with high I coefficient"
+[sim_PD_H_gif]: ./images/high_d.gif "PD controller running in the simulator, with high D coefficient"
+[sim_PD_L_gif]: ./images/low_d.gif "PD controller running in the simulator, with low D coefficient"
 
 ![alt text][sim_gif]
 
