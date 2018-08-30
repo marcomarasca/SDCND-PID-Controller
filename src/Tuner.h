@@ -10,7 +10,7 @@ struct ParamDelta {
 
 class Tuner {
  public:
-  Tuner(std::vector<double> params, std::vector<double> params_delta, unsigned int max_steps);
+  Tuner(std::vector<double> params, unsigned int max_steps);
 
   virtual ~Tuner();
 
@@ -43,7 +43,7 @@ class Tuner {
   double total_err;
   double cte_tolerance;
   double delta_tolerance;
-  
+
   void NextParam();
   void TuneUp();
   void TuneDown();

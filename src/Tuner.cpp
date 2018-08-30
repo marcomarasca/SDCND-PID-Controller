@@ -8,7 +8,7 @@ using namespace std;
 
 #define PRINT_INDENT 19
 
-Tuner::Tuner(vector<double> params, vector<double> params_delta, unsigned int max_steps) {
+Tuner::Tuner(vector<double> params, unsigned int max_steps) {
   this->params = params;
   this->max_steps = max_steps;
   this->best_err = numeric_limits<double>::max();
@@ -19,7 +19,10 @@ Tuner::Tuner(vector<double> params, vector<double> params_delta, unsigned int ma
   this->param_idx = 0;
   this->params_delta.resize(params.size());
   for (unsigned int i = 0; i < params_delta.size(); ++i) {
-    this->params_delta[i] = {params_delta[i], true};
+    if (Enabled() && params[i] == 0) {
+      cout << "[Warining]: Parameter " << i + 1 << " is zero, will not be tuned." << endl;
+    }
+    this->params_delta[i] = {params[i] * 0.1, true};
   }
   this->warmup_steps = 600;
   this->cte_tolerance = 4.0;
@@ -112,7 +115,13 @@ vector<double> Tuner::Tune(double cte) {
   return params;
 }
 
-void Tuner::NextParam() { ++param_idx %= params.size(); }
+void Tuner::NextParam() {
+  ++param_idx %= params.size();
+  while (params_delta[param_idx].value == 0) {
+    // Skip parameters that have a delta of zero
+    NextParam();
+  }
+}
 
 void Tuner::TuneUp() {
   cout << setw(PRINT_INDENT - 3) << "TUNING p_delta_" << param_idx << ": (" << params_delta[param_idx].value

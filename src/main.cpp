@@ -42,10 +42,9 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
 
   PID steering_pid;
 
-  std::vector<double> params = {Kp, Kd};
-  std::vector<double> params_delta = {0.1, 0.5};
+  std::vector<double> params = {Kp, Ki, Kd};
 
-  Tuner tuner = {params, params_delta, max_steps};
+  Tuner tuner = {params, max_steps};
 
   if (tuner.Enabled()) {
     std::cout << "Tuning ENABLED" << std::endl;
@@ -69,8 +68,10 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
     exit(EXIT_FAILURE);
   }
 
-  h.onMessage([&steering_pid, &file_out, &tuner, &max_steps](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-                                                             uWS::OpCode opCode) {
+  int i = 0;
+
+  h.onMessage([&i, &steering_pid, &file_out, &tuner, &max_steps](uWS::WebSocket<uWS::SERVER> ws, char *data,
+                                                                 size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -80,15 +81,18 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
+          ++i;
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
 
           if (tuner.Enabled()) {
+            // Tune the parameters
             std::vector<double> tuned_params = tuner.Tune(cte);
 
-            steering_pid.Init(tuned_params[0], 0, tuned_params[1]);
+            // Updates the parameters
+            steering_pid.Init(tuned_params[0], tuned_params[1], tuned_params[2]);
 
             if (tuner.IsResetCycle()) {
               reset_simulator(ws);
@@ -105,11 +109,12 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
           steer_value = clamp_steering(steer_value);
 
           // Set throttle value according to steering value, the more the angle the less the throttle.
-          // Min throttle 0.3, max throttle 0.5
-          double throttle = (1 - fabs(steer_value)) * 0.2 + 0.3;
+          // Min throttle 0.1, max throttle 0.5
+          double throttle = (1 - fabs(steer_value)) * 0.4 + 0.1;
 
           // DEBUG
           if (!tuner.Enabled()) {
+            std::cout << "Iteration: " << i << std::endl;
             std::cout << "Current Speed: " << speed << ", Current Steering Angle: " << angle << std::endl;
             std::cout << "CTE: " << cte << ", Steering Value: " << steer_value << " Throttle: " << throttle
                       << std::endl;
@@ -176,10 +181,11 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
 }
 
 int main(int argc, char *argv[]) {
-  double Kp = 0.2;
-  double Ki = 0.0;
-  double Kd = 5.2;
-
+  
+  double Kp = 0.15;
+  double Ki = 0.0001;
+  double Kd = 4.5;
+  
   unsigned int max_steps = 0; // 4500 for entire lap
 
   if (argc > 1) {
