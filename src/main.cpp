@@ -68,10 +68,8 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
     exit(EXIT_FAILURE);
   }
 
-  int i = 0;
-
-  h.onMessage([&i, &steering_pid, &file_out, &tuner, &max_steps](uWS::WebSocket<uWS::SERVER> ws, char *data,
-                                                                 size_t length, uWS::OpCode opCode) {
+  h.onMessage([&steering_pid, &file_out, &tuner, &max_steps](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+                                                             uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -81,7 +79,6 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
-          ++i;
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
@@ -114,7 +111,6 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
 
           // DEBUG
           if (!tuner.Enabled()) {
-            std::cout << "Iteration: " << i << std::endl;
             std::cout << "Current Speed: " << speed << ", Current Steering Angle: " << angle << std::endl;
             std::cout << "CTE: " << cte << ", Steering Value: " << steer_value << " Throttle: " << throttle
                       << std::endl;
@@ -181,11 +177,10 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
 }
 
 int main(int argc, char *argv[]) {
-  
-  double Kp = 0.15;
-  double Ki = 0.0001;
-  double Kd = 4.5;
-  
+  double Kp = 0.226576;
+  double Ki = 0.00011891;
+  double Kd = 4.455;
+
   unsigned int max_steps = 0; // 4500 for entire lap
 
   if (argc > 1) {
