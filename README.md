@@ -9,6 +9,9 @@
 [sim_PI_H_gif]: ./images/high_i.gif "PI controller running in the simulator, with high I coefficient"
 [sim_PD_H_gif]: ./images/high_d.gif "PD controller running in the simulator, with high D coefficient"
 [sim_PD_L_gif]: ./images/low_d.gif "PD controller running in the simulator, with low D coefficient"
+[tuned_a]: ./images/tuned_a.png "CTE value over time with tuned parameters"
+[tuned_a_fxd]: ./images/tuned_a_fixed.png "CTE value over time with fixed I"
+[tuned_b]: ./images/tuned_b.png "CTE value over time for final tuned values"
 
 ![alt text][sim_gif]
 
@@ -17,26 +20,26 @@ Overview
 
 This repository contains a C++ implementation of a proportional–integral–derivative (PID) controller that is used in order to direct a vehicle to follow a desired trajectory. A PID controller is a control loop feedback mechanism that is used in applications that requires a continuos modulated control.
 
-In simple terms the idea behind a PID controller is to output a "corrective" value that is related to the current error that can be expressed in many forms, in the case of this project we use the cross track error (CTE) expressed as the *lateral* distance between the vehicle and the center of the target trajectory. The PID then outputs a correction amount (which in our case is the steering amount to apply in order to reach the target trajectory) that is correlated to 3 different error forms:
+In simple terms the idea behind a PID controller is to output a "corrective" value that is related to the current error that can be expressed in many forms, in the case of this project we use the cross track error (CTE) expressed as the *lateral* distance between the vehicle and the center of the target trajectory. The PID then outputs a correction amount (which in our case is the steering amount to apply in order to reach the target trajectory) that is correlated to 3 different error components:
 
 - *Proportional*: The amount is directly related to the amount of CTE
-- *Integral*: The amount is related to the cumulative CTE, in order to counter eventual systematic biases (that are evident over a longer period of time), for example a slight misalignment of the tires
-- *Derivative*: The amount is related to the difference between the current and previous CTE value, with the intent of reducing the amount of "correction" to be applied the less the CTE
+- *Integral*: The amount is related to the cumulative CTE, in order to counter eventual systematic bias (that are evident over a longer period of time), for example a slight misalignment of the tires
+- *Derivative*: The amount is related to the difference between the current and previous CTE value, with the intent of reducing the amount of "correction" to be applied the closer the vehicle is to the target
 
 In this project the CTE value comes pre-computed from a simulated environment thanks to the [Udacity Simulator](https://github.com/udacity/self-driving-car-sim) and it's fed to the program through [WebSockets](https://en.wikipedia.org/wiki/WebSocket) messages. The [main](./src/main.cpp) file processes the incoming messages and parses the data that is then processed by the [PID](./src/PID.cpp) class.
 
-The program includes some predefined values for the set of *coefficients* that are applied for each of the error component (e.g. in order to reduce or augment the effect of the single error form to the whole PID). Due to some limitation in the implementation of the simulator, these values may need to be adjusted according to the system the program runs on. The program accepts 3 (double) parameters in input kP, kI and kD that corresponds to the proportional, integral and derivative coefficients respectively.
+The program includes some predefined values for the set of *coefficients* that are applied for each of the error components (e.g. in order to reduce or augment the effect of the single error component to the whole PID). Due to some limitation in the implementation of the simulator, these values may need to be adjusted according to the system the program runs on. The program accepts 3 (double) parameters in input Kp, Ki and Kd that corresponds to the proportional, integral and derivative coefficients respectively.
 
-Additionally a simple [auto-tuning](./src/Tuner.cpp) mechanism was implemented that can be enabled providing as a 4th argument the number of steps to use for error collection before tuning the parameters. The tuning mechanism simply runs the simulator for the given number of steps collecting the total error and tuning each of the parameter slightly in order to find a good combination, after tuning the cycle is repeated again until a certain threshold is reached.
+Additionally a simple [auto-tuning](./src/Tuner.cpp) mechanism was implemented that can be enabled providing as a 4th argument the number of steps to use for error collection before tuning the parameters. The tuning mechanism (implementation based on the [twiddle/coordinate ascent algorithm](https://www.youtube.com/watch?v=2uQ2BSzDvXs) from Sebastian Thrun) runs the simulation for several cycles (one cycle being composed by a max number of steps) and at each cycle the parameters are tuned according to the average (squared) error in order to steer towards a minima.
 
-PID Coefficients and Tuning
+PID Coefficients
 ---
 
 We can observe how the magnitude of the various coefficients affect the vehicle behavior:
 
-### Proportional (*kP*): 
+#### Proportional (*Kp*): 
 
-Given that the value is proportional to the amount of error its value is easiest to observe. The higher the coefficient the fastest the vehicle reacts, this is due to the fact that a big CTE implies a big output. Unfortunately this is not enough to have a smooth drive as the vehicle will tent to always overshoot and correct in the next iteration (overshooting in the opposite direction). 
+Given that the value is proportional to the amount of error its value is the easiest to observe. The higher the coefficient the fastest the vehicle reacts, this is due to the fact that a big CTE implies a big output. Unfortunately this is not enough to have a smooth drive as the vehicle will tent to always overshoot and correct in the next iteration (overshooting in the opposite direction).
 
 ![alt text][sim_P_H_gif]
 
@@ -44,31 +47,58 @@ A lower value will increase the time the oscillation occurs (and reducing the am
 
 ![alt text][sim_P_L_gif]
 
-### Integral (*kI*):
+#### Integral (*Ki*):
 
-The integral component uses the cumulative error to check if the application has a systematic bias. Accumulating the error over time will empathize this effect and so it can be used as a measure of correction. If the system is biased the vehicle will tend to follow a shifted trajectory. In our particular case I could not identify a bias in the vehicle, and if present it's definitely too small too notice, on the other end the track stays the same in the simulation so there is a sort of systematic bias (e.g. more turns to the right) that can be corrected using the integral component.
+The integral component uses the cumulative error to check if the application has a systematic bias. Accumulating the error over time will empathize this effect and so it can be used as a measure of correction. If the system is biased the vehicle will tend to follow a shifted trajectory. In our particular case I could not easily identify a bias in the vehicle, on the other end the track stays the same in the simulation so there is a sort of systematic bias (e.g. more turns to the left) that can be corrected using the integral component to help making more central turns.
 
-In the following an example of a PI only controller using a very high I coefficient:
-
-![alt text][sim_PI_H_gif]
-
-### Derivative (*kP*): 
+#### Derivative (*Kp*): 
 
 This component simply takes the difference between the current CTE and the previous one and applies a correction accordingly having the effect to reduce to amount of correction the more the target is close, contributing to a smoother experience while trying to reach the desired trajectory. 
 
-An higher value has the effect to reduce the reaction time and at the same time to counter the oscillation due to the Proportional component:
+An higher value has the effect to increase the reaction time and at the same time to counter the oscillation due to the Proportional component:
 
 ![alt text][sim_PD_H_gif]
 
-A lower value increases the reaction time but may not counter the overshooting:
+A lower value improves the reaction time but may not counter the overshooting:
 
 ![alt text][sim_PD_L_gif]
 
-With this initial observations we can quickly proceed for a tuning of the various parameters, simply observing the vehicle behavior.
+Parameter Tuning
+---
 
-There are various methodologies in the literature used to [tune a PID controller](https://en.wikipedia.org/wiki/PID_controller#Loop_tuning) both manual and automatic. In this project I mainly used manual tuning directly from observing the vehicle behavior to get to a stable point and later on fine-tuned the coefficients using a simple implementation that runs the simulation several times tweaking the various parameters at each cycle trying to find the combination that yields the lower average (squared) error.
+With the previous observations we can proceed tuning the various parameters, simply observing the vehicle behavior.
 
-I started out tuning the P component first to get to a decent reaction time and oscillation around the desired trajectory without too much overshooting. Once I found a good value I moved on directly to the D component in order to counter the oscillation and overshooting issue, while still being able to face the turns. I decided to avoid touching the I component at this time as I didn't notice a particular bias. I then started the automatic tuning for several cycles to fine tune the parameters. Unfortunately the automatic tuning is sensible to get stuck in local optima and the architecture of the system does not help as a single simulation takes several seconds to run.
+There are various methodologies in the literature used to [tune a PID controller](https://en.wikipedia.org/wiki/PID_controller#Loop_tuning) both manual and automatic. In this project I mainly used manual tuning directly from observing the vehicle behavior to get to a stable point and later on fine-tuned the coefficients using a simple implementation that runs the simulation several times tweaking the various parameters at each cycle trying to find the combination that yields the lower average (squared) error. Moreover I also [plotted](./extra/cte_visualization.ipynb) the output of the CTE over time to get a better understanding of the effect of the various parameters.
+
+I started out tuning the P component first, to get to a decent reaction time and oscillation around the desired trajectory without too much overshooting. Once I found a good value I moved on directly to the D component in order to counter the oscillation and overshooting issue, while still being able to face the turns. I decided to avoid touching the I component at this time as I didn't notice a particular bias. I then started the automatic tuning for several cycles to fine tune the parameters (still excluding the integral component).
+
+|    | Initial | Tuned    |
+|----|---------|----------|
+| Kp | 0.2     | 0.260047 |
+| Ki | 0.0     | 0.0      |
+| Kp | 5.2     | 5.51264  |
+
+After the first tuning attempt I performed a run using the tuned parameter recording the CTE values over time:
+
+![alt text][tuned_a]
+
+I noticed a certain amount of bias, which could be explained with either some systematic bias in the vehicle or simply the bias due to the track being mostly with left turns, at this point I added the integral component trying to see if it would improve:
+
+![alt text][tuned_a_fxd]
+
+Unfortunately the automatic tuning is sensible to get stuck in local optima and the architecture of the system does not help as a single cycle takes several seconds to run. Moreover the way I implemented the tuning is not great as the average error is not a sensible indicator of how smooth the vehicle drives (e.g. very quick turns around the center may yeild lower error than a smoothing driving but a bit shifted from the trajectory).
+
+At this point I decided to re-tune manually but with a very low integral component to avoid having drastic effects on the vechicle. And then run the automatic tuner to fine-tune the final parameters (a recording of the run can be found [here](./images/sim.mp4)):
+
+|    | Initial | Tuned      |
+|----|---------|------------|
+| Kp | 0.15    | 0.226576   |
+| Ki | 0.0001  | 0.00011891 |
+| Kp | 4.5     | 4.455      |
+
+![alt text][tuned_b]
+
+In the final parameters we can notice a slighlty better error graph with lower spikes and smoother curves while retaining a bit of bias. Note that this shows the limitation of the auto tuning implementation as there are multiple values that may lead to a "local" optima according to the tuner.
 
 Getting Started
 ---
@@ -87,8 +117,6 @@ Once the install for uWebSocketIO is complete, the main program can be built and
 Note that to compile the program with debug symbols you can supply the appropriate flag to cmake: ```cmake -DCMAKE_BUILD_TYPE=Debug .. && make```.
 
 Now the Udacity simulator can be run selecting the PID Control project, press start and see the application in action.
-
-![alt text][sim_gif]
 
 #### Other Dependencies
 
