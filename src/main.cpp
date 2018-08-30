@@ -14,7 +14,7 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
-double clamp_steering(double n) { return n < -1 ? -1 : n > 1 ? 1 : n; }
+double clamp_steering(double n) { return n < -1 ? -1 : (n > 1 ? 1 : n); }
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -43,7 +43,7 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
   PID steering_pid;
 
   std::vector<double> params = {Kp, Kd};
-  std::vector<double> params_delta = {0.5, 0.8};
+  std::vector<double> params_delta = {0.1, 0.5};
 
   Tuner tuner = {params, params_delta, max_steps};
 
@@ -176,9 +176,10 @@ void runSimulation(double Kp, double Ki, double Kd, unsigned int max_steps) {
 }
 
 int main(int argc, char *argv[]) {
-  double Kp = 0.1;
+  double Kp = 0.2;
   double Ki = 0.0;
-  double Kd = 0.4;
+  double Kd = 5.2;
+
   unsigned int max_steps = 0; // 4500 for entire lap
 
   if (argc > 1) {

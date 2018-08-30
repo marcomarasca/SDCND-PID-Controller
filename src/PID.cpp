@@ -1,7 +1,4 @@
 #include "PID.h"
-#include <math.h>
-
-using namespace std;
 
 /*
  * PID class implementation
@@ -28,4 +25,4 @@ void PID::UpdateError(double cte) {
   i_error += cte;
 }
 
-double PID::TotalError() { return -Kp * p_error - Ki * i_error - Kd * d_error; }
+double PID::TotalError() { return -Kp * p_error - Kd * d_error - Ki * i_error; }

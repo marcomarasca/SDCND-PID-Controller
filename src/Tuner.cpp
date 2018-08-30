@@ -23,7 +23,7 @@ Tuner::Tuner(vector<double> params, vector<double> params_delta, unsigned int ma
   }
   this->warmup_steps = 600;
   this->cte_tolerance = 4.0;
-  this->delta_tolerance = 0.1;
+  this->delta_tolerance = 0.05;
 }
 
 Tuner::~Tuner() {}
@@ -44,6 +44,7 @@ vector<double> Tuner::Tune(double cte) {
   if (IsTuned()) {
     cout << "Tuning finished, best error: " << best_err << endl;
     PrintBestParams();
+    max_steps = 0;  // Disable tuner
     return best_params;
   }
 
