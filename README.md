@@ -148,7 +148,7 @@ Under windows (WSL) and linux you can make a clean installation as follows:
 3. ```sudo apt-get install cmake```
 4. ```sudo apt-get install openssl```
 5. ```sudo apt-get install libssl-dev```
-6. ```git clone https://github.com/Az4z3l/CarND-PID-Controller```
+6. ```git clone https://github.com/marcomarasca/CarND-PID-Controller```
 7. ```sudo rm /usr/lib/libuWS.so```
 8. ```./install-ubuntu.sh```
 
